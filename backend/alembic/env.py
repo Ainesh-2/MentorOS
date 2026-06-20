@@ -6,15 +6,16 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # Adjust path to import backend app modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root so both backend.app.* and app.* imports resolve correctly
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.core.config import settings
-from app.core.database import Base
+from backend.app.core.config import settings
+from backend.app.core.database import Base
 # Import all models to ensure they are loaded on metadata before migration
-from app.models.user import User
-from app.models.student import Student
-from app.models.mentor import Mentor
-from app.models.meeting import Meeting
+from backend.app.models.user import User
+from backend.app.models.student import Student
+from backend.app.models.mentor import Mentor
+from backend.app.models.meeting import Meeting
 
 config = context.config
 
