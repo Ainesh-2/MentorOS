@@ -147,3 +147,94 @@ def allocate_student(
     student.mentor_id = mentor.id
     db.commit()
     return {"message": f"Successfully allocated Student {student.usn} to Mentor {mentor.user.full_name}"}
+
+
+@router.post("/allocate/auto", status_code=status.HTTP_200_OK)
+def auto_allocate_students(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Automatically allocate unallocated students to mentors in the same department using a Min Heap
+    to balance mentor workloads (HOD or Admin only). Prioritizes students flagged as Coral or Amber.
+    """
+    if current_user.role not in ["HOD", "Admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only HOD or Admin can trigger auto-allocation"
+        )
+        
+    students = db.query(Student).filter(Student.mentor_id == None).all()
+    mentors = db.query(Mentor).all()
+    
+    if not students:
+        return {"message": "No unallocated students found.", "allocated_count": 0}
+    if not mentors:
+        raise HTTPException(status_code=400, detail="No mentors registered in the system.")
+        
+    # Calculate current mentee counts for all mentors
+    mentor_counts = {}
+    for m in mentors:
+        mentor_counts[m.id] = db.query(Student).filter(Student.mentor_id == m.id).count()
+        
+    # Group unallocated students by department
+    students_by_dept = {}
+    for s in students:
+        dept = s.department
+        if dept not in students_by_dept:
+            students_by_dept[dept] = []
+        students_by_dept[dept].append(s)
+        
+    # Group mentors by department
+    mentors_by_dept = {}
+    for m in mentors:
+        dept = m.department
+        if dept not in mentors_by_dept:
+            mentors_by_dept[dept] = []
+        mentors_by_dept[dept].append(m)
+        
+    allocations_count = 0
+    import heapq
+    
+    # Perform auto-allocation for each department
+    for dept, dept_students in students_by_dept.items():
+        dept_mentors = mentors_by_dept.get(dept, [])
+        if not dept_mentors:
+            continue
+            
+        # Prioritize students by risk status: Coral (Critical) first, then Amber, then Green/others
+        risk_priority = {"Coral": 1, "Amber": 2, "Green": 3}
+        dept_students.sort(key=lambda s: risk_priority.get(s.risk_status, 3))
+        
+        # Build min heap of (current_mentee_count, unique_counter, mentor)
+        heap = []
+        counter = 0
+        for m in dept_mentors:
+            curr_count = mentor_counts[m.id]
+            max_cap = m.max_mentees or 20
+            if curr_count < max_cap:
+                heapq.heappush(heap, (curr_count, counter, m))
+                counter += 1
+                
+        for s in dept_students:
+            if not heap:
+                break # All mentors in this department are at full capacity
+                
+            curr_count, idx, mentor = heapq.heappop(heap)
+            
+            # Assign student to this mentor
+            s.mentor_id = mentor.id
+            allocations_count += 1
+            
+            # Update mentor count
+            mentor_counts[mentor.id] += 1
+            new_count = mentor_counts[mentor.id]
+            
+            # Push back if still under max capacity
+            max_cap = mentor.max_mentees or 20
+            if new_count < max_cap:
+                heapq.heappush(heap, (new_count, idx, mentor))
+                
+    db.commit()
+    return {"message": f"Successfully allocated {allocations_count} students to mentors.", "allocated_count": allocations_count}
+
