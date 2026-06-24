@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from backend.app.core import database
 from backend.app.core.database import Base, get_db
 from backend.app.main import app
 
@@ -16,6 +17,12 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# The audit middleware opens its own session via `database.SessionLocal`
+# (it bypasses the `get_db` dependency). Rebind it to the in-memory test
+# engine so middleware writes land in the same DB the tests read.
+database.engine = engine
+database.SessionLocal = TestingSessionLocal
 
 
 @pytest.fixture(scope="function")

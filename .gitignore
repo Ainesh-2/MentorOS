@@ -13,6 +13,34 @@ coverage/
 # TypeScript / Vite caches
 *.tsbuildinfo
 
+# Python
+__pycache__/
+__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
 # Environment files
 .env
 .env.*

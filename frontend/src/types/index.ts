@@ -9,6 +9,11 @@
 
 export type RiskCategory = "green" | "amber" | "coral";
 
+/**
+ * Lowercase UI role. The backend stores/returns capitalised roles
+ * ("Student" | "Mentor" | "HOD" | "Admin"); normalise at the API boundary
+ * with `toRole()` in `@/api/adapters` before using them here.
+ */
 export type Role = "student" | "mentor" | "hod" | "admin";
 
 /** GET /students/:id/score */
