@@ -18,10 +18,12 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
-    role = Column(String, default=UserRole.STUDENT, nullable=False) # Store string representation, or Enum
+    # Store string representation, or Enum
+    role = Column(Enum(UserRole), default=UserRole.STUDENT, nullable=False)
     is_active = Column(Boolean(), default=True)
-    is_superuser = Column(Boolean(), default=False)
 
-    # Relationships,
-    student_profile = relationship("Student", back_populates="user", uselist=False)
-    mentor_profile = relationship("Mentor", back_populates="user", uselist=False)
+    # Relationships:
+    student_profile = relationship(
+        "Student", back_populates="user", uselist=False)
+    mentor_profile = relationship(
+        "Mentor", back_populates="user", uselist=False)
