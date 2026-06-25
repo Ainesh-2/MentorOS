@@ -8,9 +8,12 @@ class Student(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    usn = Column(String, unique=True, index=True, nullable=False)  # University Seat Number
+    prn = Column(String, unique=True, index=True, nullable=False)
     department = Column(String, nullable=False)
     semester = Column(Integer, nullable=False)
+    student_mobile = Column(String, nullable=True)
+    parent_mobile = Column(String, nullable=True)
+    parent_email = Column(String, nullable=True)
     
     # Analytics / Academic signals
     attendance_rate = Column(Float, default=100.0)
