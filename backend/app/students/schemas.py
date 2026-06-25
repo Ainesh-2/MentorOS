@@ -1,4 +1,5 @@
 from typing import Optional
+from typing_extensions import Literal
 from pydantic import BaseModel
 
 
@@ -28,6 +29,13 @@ class StudentUpdate(BaseModel):
 
 class StudentConsentUpdate(BaseModel):
     consent_given: bool
+
+
+class ConsentUpdate(BaseModel):
+    """Per-category consent toggle. `wellness` is rejected server-side (locked)."""
+
+    category: Literal["academic", "attendance", "placement", "wellness"]
+    consented: bool
 
 
 class StudentResponse(StudentBase):

@@ -34,7 +34,32 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     user = db.query(User).filter(User.id == int(token_data.sub)).first()
     if not user:
         raise credentials_exception
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inactive user",
+        )
     return user
+
+
+def require_role(*roles: str):
+    """
+    Dependency factory enforcing role-based access. Role is read from the
+    DB-backed User (never from the client), so the JWT format is unchanged.
+
+    Usage: ``Depends(require_role("Admin", "HOD"))``
+    Roles use the capitalised values defined in ``UserRole``.
+    """
+
+    def checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required role: {', '.join(roles)}",
+            )
+        return current_user
+
+    return checker
 
 
 @router.post("/login", response_model=schemas.Token)

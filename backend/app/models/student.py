@@ -18,13 +18,24 @@ class Student(Base):
     # Analytics / Academic signals
     attendance_rate = Column(Float, default=100.0)
     cgpa = Column(Float, default=0.0)
+    sgpa = Column(Float, nullable=True)  # THIS semester's GPA — drives Academic component
     success_score = Column(Float, default=100.0)
     risk_status = Column(String, default="Green") # Green, Amber, Coral
     
-    # Consent flag
+    # Consent flag (legacy single boolean — kept for backward compatibility).
+    # Per-category decisions live in the StudentConsent table (see `consents`).
     consent_given = Column(Boolean, default=True)
+
+    # DPDP Act 2023: under-18 students require verifiable parental consent;
+    # they cannot self-update consent server-side.
+    is_under_18 = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="student_profile")
     mentor_id = Column(Integer, ForeignKey("mentors.id"), nullable=True)
     mentor = relationship("Mentor", back_populates="students")
+    consents = relationship(
+        "StudentConsent",
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
