@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174",
     ]
 
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = ""
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",

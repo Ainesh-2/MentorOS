@@ -6,6 +6,7 @@ import { LoadingState } from "@/components/primitives";
 // Route-level code splitting — the landing page no longer pulls in Recharts
 // (HOD) or the heavier dashboard code until those routes are visited.
 const Landing = lazy(() => import("@/pages/auth/Landing"));
+const Callback = lazy(() => import("@/pages/auth/Callback"));
 const StudentDashboard = lazy(() => import("@/pages/student/StudentDashboard"));
 const MentorDashboard = lazy(() => import("@/pages/mentor/MentorDashboard"));
 const HODDashboard = lazy(() => import("@/pages/admin/HODDashboard"));
@@ -24,6 +25,7 @@ export default function App() {
     <Suspense fallback={<FullScreenFallback />}>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/auth/callback" element={<Callback />} />
         <Route path="/app" element={<AppShell />}>
           <Route index element={<Navigate to="/app/mentor" replace />} />
           <Route path="student" element={<StudentDashboard />} />
