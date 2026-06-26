@@ -34,6 +34,9 @@ class Student(Base):
     user = relationship("User", back_populates="student_profile")
     mentor_id = Column(Integer, ForeignKey("mentors.id"), nullable=True)
     mentor = relationship("Mentor", back_populates="students")
+    meetings = relationship("Meeting", back_populates="student")
+    attendance_records = relationship("AttendanceRecord", back_populates="student")
+    lms_activity_records = relationship("LmsActivityRecord", back_populates="student")
     consents = relationship(
         "StudentConsent",
         back_populates="student",

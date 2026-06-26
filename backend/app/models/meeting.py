@@ -24,7 +24,7 @@ class Meeting(Base):
 
     # Relationships
     mentor = relationship("Mentor", back_populates="meetings")
-    student = relationship("Student", foreign_keys=[student_id])
+    student = relationship("Student", back_populates="meetings", foreign_keys=[student_id])
     # Structured post-meeting log (one-to-one). Coexists with the free-text `notes`.
     log = relationship(
         "MeetingLog",

@@ -140,6 +140,7 @@ export function Topbar({ role, title }: { role: Role; title: string }) {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    sessionStorage.removeItem("token");
     setSignedIn(false);
     setUserEmail(null);
   };
