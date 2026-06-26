@@ -10,6 +10,7 @@ class Mentor(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     department = Column(String, nullable=False)
     max_mentees = Column(Integer, default=20)
+    mobile_no = Column(String, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="mentor_profile")
