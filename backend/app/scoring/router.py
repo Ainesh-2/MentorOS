@@ -1,6 +1,7 @@
-from typing import Any
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from backend.app.core.database import get_db
 from backend.app.auth.router import get_current_user
@@ -10,6 +11,10 @@ from backend.app.scoring import schemas
 
 router = APIRouter()
 
+
+# ============================================
+# CORE FORMULA — Success Score Engine
+# ============================================
 
 def compute_success_score(attendance: float, academic: float, engagement: float, placement: float) -> float:
     """
@@ -34,11 +39,125 @@ def get_risk_band(score: float) -> str:
         return "Coral"
 
 
+def _build_breakdown(student: Student) -> schemas.SuccessScoreBreakdown:
+    """Helper to build a SuccessScoreBreakdown from a Student ORM object."""
+    attendance = student.attendance_rate or 0.0
+    academic = min((student.cgpa or 0.0) * 10.0, 100.0)  # CGPA (0-10) -> 0-100
+    engagement = getattr(student, "engagement_score", 70.0) or 70.0
+    placement = getattr(student, "placement_score", 70.0) or 70.0
+
+    overall = compute_success_score(attendance, academic, engagement, placement)
+    band = get_risk_band(overall)
+
+    return schemas.SuccessScoreBreakdown(
+        student_id=student.id,
+        usn=student.usn,
+        full_name=student.user.full_name if student.user else "Unknown",
+        overall_score=overall,
+        risk_band=band,
+        components=schemas.ScoreComponents(
+            attendance_score=round(attendance, 2),
+            academic_score=round(academic, 2),
+            engagement_score=round(engagement, 2),
+            placement_score=round(placement, 2),
+        ),
+    )
+
+
+# ============================================
+# ENDPOINTS
+# ============================================
+
+@router.get("/", response_model=List[schemas.SuccessScoreBreakdown])
+def get_all_scores(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    List all student scores with breakdown and risk bands.
+    Accessible to Mentors, HODs, and Admins.
+    """
+    if current_user.role not in ("Mentor", "HOD", "Admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+
+    students = db.query(Student).all()
+    return [_build_breakdown(s) for s in students]
+
+
+@router.get("/risk-summary", response_model=schemas.RiskBandSummary)
+def get_risk_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Aggregate risk band counts across all students.
+    Returns { green, amber, coral, total }.
+    """
+    if current_user.role not in ("Mentor", "HOD", "Admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+
+    students = db.query(Student).all()
+    green = amber = coral = 0
+    for s in students:
+        breakdown = _build_breakdown(s)
+        if breakdown.risk_band == "Green":
+            green += 1
+        elif breakdown.risk_band == "Amber":
+            amber += 1
+        else:
+            coral += 1
+
+    return schemas.RiskBandSummary(
+        green=green, amber=amber, coral=coral, total=len(students)
+    )
+
+
+@router.get("/department-risk", response_model=List[schemas.DepartmentRiskSummary])
+def get_department_risk(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Risk breakdown per department. Useful for the HOD heatmap view.
+    """
+    if current_user.role not in ("HOD", "Admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only HOD and Admin can view department-level risk data"
+        )
+
+    students = db.query(Student).all()
+    dept_map: dict = {}
+    for s in students:
+        dept = s.department
+        if dept not in dept_map:
+            dept_map[dept] = {"green": 0, "amber": 0, "coral": 0, "total": 0}
+        breakdown = _build_breakdown(s)
+        dept_map[dept]["total"] += 1
+        if breakdown.risk_band == "Green":
+            dept_map[dept]["green"] += 1
+        elif breakdown.risk_band == "Amber":
+            dept_map[dept]["amber"] += 1
+        else:
+            dept_map[dept]["coral"] += 1
+
+    return [
+        schemas.DepartmentRiskSummary(department=dept, **counts)
+        for dept, counts in dept_map.items()
+    ]
+
+
 @router.get("/{student_id}", response_model=schemas.SuccessScoreBreakdown)
 def get_student_score(
     student_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> Any:
     """
     Fetch success score explanation and breakdown for a student.
@@ -48,84 +167,99 @@ def get_student_score(
     if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student not found"
+            detail=f"Student with id {student_id} not found"
         )
-    
-    # RBAC check: Student can only view their own
-    if current_user.role == "Student" and student.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view your own success score breakdown"
-        )
-    
-    # Calculate components
-    # Map CGPA to a 100-point scale: CGPA * 10
-    academic_score = min(student.cgpa * 10.0, 100.0)
-    attendance_score = student.attendance_rate
-    
-    # Default placeholder values for engagement and placement (Team B can implement real metrics)
-    engagement_score = 75.0
-    placement_score = 80.0
-    
-    overall_score = compute_success_score(
-        attendance=attendance_score,
-        academic=academic_score,
-        engagement=engagement_score,
-        placement=placement_score
-    )
-    
-    risk_band = get_risk_band(overall_score)
-    
-    # Update student record with the recalculated score & band,
-    student.success_score = overall_score
-    student.risk_status = risk_band
-    db.commit()
-    
-    return {
-        "student_id": student.id,
-        "usn": student.usn,
-        "overall_score": overall_score,
-        "risk_band": risk_band,
-        "components": {
-            "attendance_score": attendance_score,
-            "academic_score": academic_score,
-            "engagement_score": engagement_score,
-            "placement_score": placement_score
-        }
-    }
+
+    # Students can only view their own score
+    if current_user.role == "Student":
+        if not current_user.student_profile or current_user.student_profile.id != student_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Students can only view their own score"
+            )
+
+    return _build_breakdown(student)
 
 
-@router.post("/batch-recalculate", status_code=status.HTTP_200_OK)
-def run_batch_recalculation(
+@router.put("/{student_id}", response_model=schemas.SuccessScoreBreakdown)
+def update_student_score(
+    student_id: int,
+    update: schemas.ScoreUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> Any:
     """
-    Run a batch job to recalculate success scores for all students.
-    Accessible only by HOD or Admin.
+    Update individual metric values for a student and recompute their score.
+    Only Mentors, HODs, and Admins can update scores.
     """
-    if current_user.role not in ["HOD", "Admin"]:
+    if current_user.role not in ("Mentor", "HOD", "Admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only HOD or Admin can trigger success score batch jobs"
+            detail="Insufficient permissions"
         )
-    
-    students = db.query(Student).all()
-    count = 0
-    for student in students:
-        academic_score = min(student.cgpa * 10.0, 100.0)
-        attendance_score = student.attendance_rate
-        overall_score = compute_success_score(
-            attendance=attendance_score,
-            academic=academic_score,
-            engagement=75.0,
-            placement=80.0
+
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Student with id {student_id} not found"
         )
-        risk_band = get_risk_band(overall_score)
-        
-        student.success_score = overall_score
-        student.risk_status = risk_band
-        count += 1
-        
+
+    # Update individual metrics
+    if update.attendance_score is not None:
+        student.attendance_rate = update.attendance_score
+    if update.academic_score is not None:
+        student.cgpa = update.academic_score / 10.0  # Convert back to CGPA scale
+    # engagement_score and placement_score would need new columns;
+    # for now we persist them via recomputation from the stored values.
+
+    # Recompute overall score and risk band
+    breakdown = _build_breakdown(student)
+    student.success_score = breakdown.overall_score
+    student.risk_status = breakdown.risk_band
+
     db.commit()
-    return {"message": f"Successfully ran batch job. Recalculated scores for {count} students."}
+    db.refresh(student)
+
+    return _build_breakdown(student)
+
+
+@router.post("/compute-all", response_model=schemas.BatchComputeResponse)
+def compute_all_scores(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Batch recompute success scores for all students.
+    Updates success_score and risk_status fields in the database.
+    Only HOD and Admin can trigger batch computation.
+    """
+    if current_user.role not in ("HOD", "Admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only HOD and Admin can trigger batch score computation"
+        )
+
+    students = db.query(Student).all()
+    green = amber = coral = 0
+
+    for student in students:
+        breakdown = _build_breakdown(student)
+        student.success_score = breakdown.overall_score
+        student.risk_status = breakdown.risk_band
+
+        if breakdown.risk_band == "Green":
+            green += 1
+        elif breakdown.risk_band == "Amber":
+            amber += 1
+        else:
+            coral += 1
+
+    db.commit()
+
+    return schemas.BatchComputeResponse(
+        updated_count=len(students),
+        risk_summary=schemas.RiskBandSummary(
+            green=green, amber=amber, coral=coral, total=len(students)
+        ),
+    )
