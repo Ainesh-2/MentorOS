@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
+from sqlalchemy.orm import relationship
 
 from backend.app.core.database import Base
 
@@ -33,6 +34,8 @@ class AttendanceRecord(Base):
     period = Column(String(20), nullable=False, index=True)
     created_at = Column(DateTime, default=_utcnow)
 
+    student = relationship("Student", back_populates="attendance_records")
+
     __table_args__ = (
         UniqueConstraint("student_id", "subject_code", "period", name="uq_attendance_student_subject_period"),
     )
@@ -50,6 +53,8 @@ class LmsActivityRecord(Base):
     assignments_submitted = Column(Integer, default=0)
     assignments_total = Column(Integer, default=0)
     created_at = Column(DateTime, default=_utcnow)
+
+    student = relationship("Student", back_populates="lms_activity_records")
 
     __table_args__ = (
         UniqueConstraint("student_id", "period", name="uq_lms_student_period"),

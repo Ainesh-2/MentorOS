@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, LoadingState } from "@/components/primitives";
 import { supabase } from "@/lib/supabase";
+import { loginToBackend } from "@/lib/auth";
 
 export default function Callback() {
   const navigate = useNavigate();
@@ -20,9 +21,22 @@ export default function Callback() {
       }
 
       if (data?.session?.user?.email) {
-        setStatus("success");
-        setMessage(`Signed in as ${data.session.user.email}. Redirecting now…`);
-        window.setTimeout(() => navigate("/app/mentor"), 900);
+        // Exchange Supabase access token for internal backend JWT
+        try {
+          const accessToken = data.session.access_token;
+          if (accessToken) {
+            await loginToBackend(accessToken);
+          }
+          setStatus("success");
+          setMessage(`Signed in as ${data.session.user.email}. Redirecting now…`);
+          window.setTimeout(() => navigate("/app/mentor"), 900);
+          return;
+        } catch (err) {
+          console.error("Backend login failed", err);
+          setStatus("error");
+          setMessage("Signed in with Supabase, but backend login failed. Check console.");
+          return;
+        }
         return;
       }
 

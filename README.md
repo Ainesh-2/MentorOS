@@ -42,6 +42,7 @@ DATABASE_URL=postgresql://postgres.your_project_ref:your_db_password@aws-0-ap-so
 SUPABASE_URL=https://your_project_ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 SUPABASE_JWT_SECRET=your_jwt_secret_here
+SUPABASE_ANON_KEY=your_anon_key_here
 ```
 
 ### Frontend `.env`

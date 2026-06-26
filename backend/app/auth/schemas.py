@@ -18,6 +18,7 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = True
+    supabase_user_id: Optional[str] = None
 
 
 class UserCreate(UserBase):
