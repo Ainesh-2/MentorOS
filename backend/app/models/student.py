@@ -8,7 +8,7 @@ class Student(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    prn = Column(String, unique=True, index=True, nullable=False)
+    usn = Column(String, unique=True, index=True, nullable=False)
     department = Column(String, nullable=False)
     semester = Column(Integer, nullable=False)
     student_mobile = Column(String, nullable=True)

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class StudentBase(BaseModel):
-    prn: str
+    usn: str
     department: str
     semester: int
     attendance_rate: Optional[float] = 100.0

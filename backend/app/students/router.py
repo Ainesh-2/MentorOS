@@ -120,7 +120,7 @@ def import_students_csv(
 ) -> Any:
     """
     Import student data from a CSV file (Admin/HOD only).
-    This endpoint parses columns, matches records to PRNs, and updates database records.
+    This endpoint parses columns, matches records to USNs, and updates database records.
     """
     if current_user.role not in ["HOD", "Admin"]:
         raise HTTPException(
