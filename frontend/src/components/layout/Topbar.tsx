@@ -4,8 +4,9 @@ import { Check, ChevronDown, Menu, Sparkles } from "lucide-react";
 import type { Role } from "@/types";
 import { useAppStore } from "@/store/useAppStore";
 import { ROLE_HOME, ROLE_TITLE, resolveIdentity } from "@/api/session";
-import { Avatar } from "@/components/primitives";
+import { Avatar, Button } from "@/components/primitives";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 const ROLE_ORDER: Role[] = ["student", "mentor", "hod", "admin"];
 
@@ -105,6 +106,44 @@ function RoleSwitcher() {
 
 export function Topbar({ role, title }: { role: Role; title: string }) {
   const { setSidebarOpen, activeRole, toggleCompanion } = useAppStore();
+  const [signedIn, setSignedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadSession() {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Supabase session load error", error);
+      }
+      if (data?.session?.user?.email) {
+        setSignedIn(true);
+        setUserEmail(data.session.user.email);
+      } else {
+        setSignedIn(false);
+        setUserEmail(null);
+      }
+    }
+
+    loadSession();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        setSignedIn(true);
+        setUserEmail(session.user.email);
+      } else {
+        setSignedIn(false);
+        setUserEmail(null);
+      }
+    });
+
+    return () => listener?.subscription?.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    sessionStorage.removeItem("token");
+    setSignedIn(false);
+    setUserEmail(null);
+  };
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-ink/8 bg-snow/70 px-4 backdrop-blur-md sm:px-6">
@@ -134,6 +173,19 @@ export function Topbar({ role, title }: { role: Role; title: string }) {
           AI Companion
         </button>
       )}
+
+      <div className="hidden items-center gap-3 rounded-full border border-ink/10 bg-white/75 px-3 py-2 text-caption text-ink-soft sm:flex">
+        {signedIn ? (
+          <>
+            <span className="truncate">Signed in as {userEmail}</span>
+            <Button size="sm" variant="secondary" onClick={handleSignOut}>
+              Sign out
+            </Button>
+          </>
+        ) : (
+          <span>Not signed in</span>
+        )}
+      </div>
 
       <RoleSwitcher />
     </header>

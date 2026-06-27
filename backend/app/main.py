@@ -1,7 +1,16 @@
+import os
+import sys
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(APP_DIR))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
+from backend.app.core.audit_middleware import AuditMiddleware
 from backend.app.auth.router import router as auth_router
 from backend.app.students.router import router as students_router
 from backend.app.scoring.router import router as scoring_router
@@ -14,6 +23,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Audit every successful state-changing request (coarse safety net).
+app.add_middleware(AuditMiddleware)
 
 # Set all CORS enabled origins
 if settings.BACKEND_CORS_ORIGINS:

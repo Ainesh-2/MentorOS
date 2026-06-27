@@ -29,15 +29,18 @@ const COPY: Record<Key, { label: string; description: string }> = {
 export function ConsentSettings({
   studentId,
   consents: initial,
+  isUnder18 = false,
 }: {
   studentId: string;
   consents: Consents;
+  /** DPDP: under-18 students cannot self-update — all categories lock. */
+  isUnder18?: boolean;
 }) {
   const [consents, setConsents] = useState<Consents>(initial);
   const [saving, setSaving] = useState<Key | null>(null);
 
   async function toggle(key: Key, next: boolean) {
-    if (key === "wellness") return; // locked
+    if (key === "wellness" || isUnder18) return; // locked
     const updated = { ...consents, [key]: next };
     setConsents(updated); // optimistic
     setSaving(key);
@@ -58,11 +61,19 @@ export function ConsentSettings({
           You decide what your mentor sees. Changes apply immediately.
         </span>
       </div>
+      {isUnder18 && (
+        <div className="mb-2 rounded-lg border border-signal-amber/20 bg-signal-amber/10 p-3 text-caption text-signal-amber">
+          A parent or guardian must provide consent for this account. Contact your
+          admin to enable parental approval.
+        </div>
+      )}
       <div className="divide-y divide-ink/8">
         {(["academic", "attendance", "placement"] as Key[]).map((key) => (
           <Switch
             key={key}
             label={COPY[key].label}
+            locked={isUnder18}
+            lockedNote={isUnder18 ? "Parent approval needed" : undefined}
             description={
               saving === key ? "Saving…" : COPY[key].description
             }

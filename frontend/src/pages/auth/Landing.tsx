@@ -10,6 +10,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Lock,
+  LogIn,
   Menu,
   ShieldCheck,
   Users,
@@ -24,6 +25,7 @@ import { Button } from "@/components/primitives";
 import { Reveal } from "@/components/Reveal";
 import { SignalDisc } from "@/components/SignalDisc";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
+import { signInWithGoogle } from "@/lib/auth";
 
 /** Illustrative high-performing student for the hero disc. */
 const HERO_BREAKDOWN: Breakdown = {
@@ -177,8 +179,14 @@ export default function Landing() {
               transition={{ duration: 0.6, delay: 0.18 }}
               className="mt-7 flex flex-wrap items-center gap-3"
             >
-              <Button size="lg" onClick={() => navigate("/app/mentor")} iconRight={<ArrowRight size={18} />}>
-                Open the live demo
+              <Button
+                size="lg"
+                onClick={async () => {
+                  await signInWithGoogle();
+                }}
+                iconRight={<LogIn size={18} />}
+              >
+                Sign in with Google
               </Button>
               <Button size="lg" variant="secondary" onClick={() => scrollTo("#how")}>
                 See how the score works

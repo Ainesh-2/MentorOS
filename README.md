@@ -31,6 +31,29 @@ npm run build
 npm run preview
 ```
 
+## Environment Setup
+
+This project uses separate environment files for the backend and frontend. Create or update these files with your Supabase project values.
+
+### Backend `.env`
+
+```dotenv
+DATABASE_URL=postgresql://postgres.your_project_ref:your_db_password@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+SUPABASE_URL=https://your_project_ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+SUPABASE_JWT_SECRET=your_jwt_secret_here
+SUPABASE_ANON_KEY=your_anon_key_here
+```
+
+### Frontend `.env`
+
+```dotenv
+VITE_SUPABASE_URL=https://your_project_ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+```
+
+> Do not commit `.env` files to version control. Keep secrets and project-specific values local.
+
 ## Project Structure
 
 ```text

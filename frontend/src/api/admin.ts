@@ -136,3 +136,45 @@ export function generateComplianceExport(): Promise<ComplianceExport> {
 }
 
 export { ROLE_LABEL };
+
+/* ----------------------------------------------------------------
+   Real CSV import. Unlike the mock helpers above, this hits the
+   FastAPI backend directly (multipart upload) and returns its
+   row-level validation result. The import endpoints recompute the
+   affected students' scores server-side, so no separate recompute
+   call is needed.
+   ---------------------------------------------------------------- */
+
+export type ImportType = "attendance" | "sgpa" | "lms";
+
+export interface ImportRowError {
+  row: number;
+  column: string;
+  reason: string;
+}
+
+export interface ImportResult {
+  row_count: number;
+  success_count: number;
+  error_log: ImportRowError[];
+}
+
+/** POST /api/v1/admin/import/:type — multipart upload. */
+export async function importCsv(type: ImportType, file: File): Promise<ImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const token = sessionStorage.getItem("token");
+  const res = await fetch(`/api/v1/admin/import/${type}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const msg =
+      res.status === 401 || res.status === 403
+        ? "Not authorized — sign in as an admin to import."
+        : `Import failed (HTTP ${res.status}).`;
+    throw new Error(msg);
+  }
+  return res.json();
+}

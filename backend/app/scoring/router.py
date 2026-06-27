@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.app.core.database import get_db
+from backend.app.core.config import settings
 from backend.app.auth.router import get_current_user
 from backend.app.models.user import User
 from backend.app.models.student import Student
 from backend.app.scoring import schemas
+from backend.app.scoring.engine import ScoringEngine, recompute_and_store
 
 router = APIRouter()
 
@@ -160,25 +162,28 @@ def get_student_score(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
-    Fetch success score explanation and breakdown for a student.
-    Students can fetch their own, and Mentors/HODs/Admins can query any student.
+    Fetch the real (Phase-3, SGPA-variant) success score breakdown for a student.
+    Students can fetch their own; Mentors/HODs/Admins can query any student.
+
+    Read-only: this computes the breakdown from source tables and does NOT
+    persist anything (persistence happens via the nightly job / recompute).
     """
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Student with id {student_id} not found"
+            detail="Student not found"
         )
 
-    # Students can only view their own score
-    if current_user.role == "Student":
-        if not current_user.student_profile or current_user.student_profile.id != student_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Students can only view their own score"
-            )
+    # RBAC check: Student can only view their own
+    if current_user.role == "Student" and student.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own success score breakdown"
+        )
 
-    return _build_breakdown(student)
+    data = ScoringEngine(db).compute_success_score(student_id, settings.SCORING_PERIOD)
+    return {**data, "usn": student.usn}
 
 
 @router.put("/{student_id}", response_model=schemas.SuccessScoreBreakdown)
@@ -210,8 +215,6 @@ def update_student_score(
         student.attendance_rate = update.attendance_score
     if update.academic_score is not None:
         student.cgpa = update.academic_score / 10.0  # Convert back to CGPA scale
-    # engagement_score and placement_score would need new columns;
-    # for now we persist them via recomputation from the stored values.
 
     # Recompute overall score and risk band
     breakdown = _build_breakdown(student)
@@ -240,26 +243,35 @@ def compute_all_scores(
             detail="Only HOD and Admin can trigger batch score computation"
         )
 
+    count = recompute_and_store(db, settings.SCORING_PERIOD)
     students = db.query(Student).all()
-    green = amber = coral = 0
-
-    for student in students:
-        breakdown = _build_breakdown(student)
-        student.success_score = breakdown.overall_score
-        student.risk_status = breakdown.risk_band
-
-        if breakdown.risk_band == "Green":
-            green += 1
-        elif breakdown.risk_band == "Amber":
-            amber += 1
-        else:
-            coral += 1
-
-    db.commit()
+    green = sum(1 for s in students if s.risk_status == "Green")
+    amber = sum(1 for s in students if s.risk_status == "Amber")
+    coral = sum(1 for s in students if s.risk_status == "Coral")
 
     return schemas.BatchComputeResponse(
-        updated_count=len(students),
+        updated_count=count,
         risk_summary=schemas.RiskBandSummary(
             green=green, amber=amber, coral=coral, total=len(students)
         ),
     )
+
+
+@router.post("/batch-recalculate", status_code=status.HTTP_200_OK)
+def run_batch_recalculation(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Recalculate + persist real success scores for all students (HOD / Admin).
+    Uses the Phase-3 engine and writes history rows + mirrors to the students
+    table — the same path as POST /admin/scores/recompute.
+    """
+    if current_user.role not in ["HOD", "Admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only HOD or Admin can trigger success score batch jobs"
+        )
+
+    count = recompute_and_store(db, settings.SCORING_PERIOD)
+    return {"message": f"Successfully ran batch job. Recalculated scores for {count} students."}

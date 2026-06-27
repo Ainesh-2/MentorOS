@@ -1,14 +1,15 @@
 from typing import Any, List
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.auth.router import get_current_user
+from backend.app.core.audit import write_audit
+from backend.app.auth.router import get_current_user, require_role
 from backend.app.models.user import User
 from backend.app.models.student import Student
 from backend.app.models.mentor import Mentor
-from backend.app.models.meeting import Meeting
+from backend.app.models.meeting import Meeting, MeetingLog
 from backend.app.mentoring import schemas as mentoring_schemas
 from backend.app.students import schemas as student_schemas
 from backend.app.scoring.router import compute_success_score, get_risk_band
@@ -43,6 +44,7 @@ def _enrich_meeting(meeting: Meeting, db: Session) -> mentoring_schemas.MeetingR
         id=meeting.id,
         title=meeting.title,
         date=meeting.date,
+        mode=meeting.mode,
         notes=meeting.notes,
         status=meeting.status,
         mentor_id=meeting.mentor_id,
@@ -118,7 +120,7 @@ def get_mentor_roster(
                 consent_given=student.consent_given,
                 last_meeting=_enrich_meeting(last_meeting, db) if last_meeting else None,
                 next_meeting=_enrich_meeting(next_meeting, db) if next_meeting else None,
-                open_action_items=0,  # Can be extended when action_items table exists
+                open_action_items=0,
             )
         )
 
@@ -193,6 +195,16 @@ def allocate_student(
     student.mentor_id = mentor.id
     db.commit()
     db.refresh(student)
+
+    # Write audit log
+    write_audit(
+        db,
+        current_user.id,
+        "allocate_student",
+        "student",
+        student.id,
+        details={"mentor_id": mentor.id},
+    )
 
     return mentoring_schemas.AllocationResponse(
         student_id=student.id,
@@ -314,6 +326,7 @@ def schedule_meeting(
         student_id=meeting_data.student_id,
         title=meeting_data.title,
         date=meeting_data.date,
+        mode=meeting_data.mode,
         notes=meeting_data.notes,
         status=meeting_data.status or "Scheduled",
     )
@@ -425,6 +438,114 @@ def delete_meeting(
     db.commit()
 
     return {"message": f"Meeting {meeting_id} deleted successfully"}
+
+
+@router.post("/meetings/{meeting_id}/log", status_code=status.HTTP_201_CREATED)
+def log_meeting(
+    meeting_id: int,
+    payload: mentoring_schemas.MeetingLogCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Mentor", "Admin")),
+) -> Any:
+    """
+    Record a structured log for a completed meeting (topics, action items,
+    next date, observations) and mark the meeting completed. Mentors may only
+    log their own meetings.
+    """
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found"
+        )
+
+    if current_user.role == "Mentor":
+        mentor = db.query(Mentor).filter(Mentor.user_id == current_user.id).first()
+        if not mentor or meeting.mentor_id != mentor.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot log another mentor's meeting",
+            )
+
+    if meeting.log:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This meeting has already been logged",
+        )
+
+    log = MeetingLog(
+        meeting_id=meeting.id,
+        topics_discussed=payload.topics_discussed,
+        action_items=payload.action_items,
+        next_meeting_date=payload.next_meeting_date,
+        observations=payload.observations,
+        logged_by=current_user.id,
+    )
+    meeting.status = "Completed"
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    write_audit(db, current_user.id, "log_meeting", "meeting", meeting.id)
+
+    return {"message": "Meeting logged", "log_id": log.id}
+
+
+@router.get("/students/{student_id}/meetings")
+def get_student_meetings(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Return a student's meetings (newest first) with their structured logs.
+    Students may only view their own meetings.
+    """
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student not found"
+        )
+
+    if current_user.role == "Student" and student.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot view another student's meetings",
+        )
+
+    meetings = (
+        db.query(Meeting)
+        .filter(Meeting.student_id == student_id)
+        .order_by(Meeting.date.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": m.id,
+            "student_id": m.student_id,
+            "mentor_id": m.mentor_id,
+            "title": m.title,
+            "date": m.date.isoformat() if m.date else None,
+            "mode": m.mode,
+            "status": m.status,
+            "log": (
+                {
+                    "topics_discussed": m.log.topics_discussed,
+                    "action_items": m.log.action_items,
+                    "next_meeting_date": (
+                        m.log.next_meeting_date.isoformat()
+                        if m.log.next_meeting_date
+                        else None
+                    ),
+                    "observations": m.log.observations,
+                    "logged_at": m.log.logged_at.isoformat() if m.log.logged_at else None,
+                }
+                if m.log
+                else None
+            ),
+        }
+        for m in meetings
+    ]
 
 
 # ============================================

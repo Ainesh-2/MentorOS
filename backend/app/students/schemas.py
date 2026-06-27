@@ -1,4 +1,5 @@
 from typing import Optional
+from typing_extensions import Literal
 from pydantic import BaseModel
 
 
@@ -11,6 +12,11 @@ class StudentBase(BaseModel):
     success_score: Optional[float] = 100.0
     risk_status: Optional[str] = "Green"
     consent_given: Optional[bool] = True
+    student_mobile: Optional[str] = None
+    parent_mobile: Optional[str] = None
+    parent_email: Optional[str] = None
+    sgpa: Optional[float] = None
+    is_under_18: Optional[bool] = False
 
 
 class StudentCreate(StudentBase):
@@ -24,10 +30,22 @@ class StudentUpdate(BaseModel):
     cgpa: Optional[float] = None
     success_score: Optional[float] = None
     risk_status: Optional[str] = None
+    sgpa: Optional[float] = None
+    student_mobile: Optional[str] = None
+    parent_mobile: Optional[str] = None
+    parent_email: Optional[str] = None
+    is_under_18: Optional[bool] = None
 
 
 class StudentConsentUpdate(BaseModel):
     consent_given: bool
+
+
+class ConsentUpdate(BaseModel):
+    """Per-category consent toggle. `wellness` is rejected server-side (locked)."""
+
+    category: Literal["academic", "attendance", "placement", "wellness"]
+    consented: bool
 
 
 class StudentResponse(StudentBase):

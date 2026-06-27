@@ -1,7 +1,13 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
-from pydantic import BaseModel
-from backend.app.students.schemas import StudentResponse
+from pydantic import BaseModel, Field
+
+
+class MeetingLogCreate(BaseModel):
+    topics_discussed: List[str] = Field(default_factory=list)
+    action_items: List[str] = Field(default_factory=list)
+    next_meeting_date: Optional[date] = None
+    observations: Optional[str] = None
 
 
 # ============================================
@@ -11,6 +17,7 @@ from backend.app.students.schemas import StudentResponse
 class MeetingBase(BaseModel):
     title: str
     date: datetime
+    mode: Optional[str] = "in-person"  # in-person, video
     notes: Optional[str] = None
     status: Optional[str] = "Scheduled"
 
@@ -22,6 +29,7 @@ class MeetingCreate(MeetingBase):
 class MeetingUpdate(BaseModel):
     title: Optional[str] = None
     date: Optional[datetime] = None
+    mode: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
 

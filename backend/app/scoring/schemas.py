@@ -12,10 +12,21 @@ class ScoreComponents(BaseModel):
 class SuccessScoreBreakdown(BaseModel):
     student_id: int
     usn: str
-    full_name: str
-    overall_score: float
-    risk_band: str  # Green, Amber, Coral
-    components: ScoreComponents
+    
+    # development fields
+    period: Optional[str] = None
+    attendance_component: Optional[float] = None
+    academic_component: Optional[float] = None
+    engagement_component: Optional[float] = None
+    placement_component: Optional[float] = None
+    total_score: Optional[float] = None
+    risk_category: Optional[str] = None
+    
+    # our fields
+    full_name: Optional[str] = None
+    overall_score: Optional[float] = None
+    risk_band: Optional[str] = None  # Green, Amber, Coral
+    components: Optional[ScoreComponents] = None
 
     class Config:
         from_attributes = True
