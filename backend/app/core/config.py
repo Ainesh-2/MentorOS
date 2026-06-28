@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # endpoint falls back to synchronous computation when no broker is reachable.
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    CELERY_BROKER_CONNECTION_TIMEOUT: int = 2
+    CELERY_BROKER_CONNECTION_RETRY: bool = False
+    CELERY_TASK_ALWAYS_EAGER: bool = True
+    CELERY_TASK_EAGER_PROPAGATES: bool = True
     # Current academic period used by the scoring engine.
     SCORING_PERIOD: str = "2025-ODD"
     

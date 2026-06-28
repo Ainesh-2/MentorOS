@@ -36,6 +36,10 @@ if CELERY_AVAILABLE:
         result_backend=settings.CELERY_RESULT_BACKEND,
         timezone="UTC",
         enable_utc=True,
+        broker_connection_timeout=settings.CELERY_BROKER_CONNECTION_TIMEOUT,
+        broker_connection_retry=settings.CELERY_BROKER_CONNECTION_RETRY,
+        task_always_eager=settings.CELERY_TASK_ALWAYS_EAGER,
+        task_eager_propagates=settings.CELERY_TASK_EAGER_PROPAGATES,
         beat_schedule={
             "compute-all-scores-nightly": {
                 "task": "backend.app.scoring.tasks.compute_all_scores",
