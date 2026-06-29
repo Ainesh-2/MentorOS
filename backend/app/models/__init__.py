@@ -12,6 +12,7 @@ from backend.app.models.academic import (
     PlacementProfile,
     StudentSuccessScore,
 )
+from backend.app.allocation.models import Allocation
 
 # Re-exported for convenience and to register every model on Base.metadata
 # (Alembic autogenerate + tests' create_all depend on these imports).
@@ -30,4 +31,5 @@ __all__ = [
     "LmsActivityRecord",
     "PlacementProfile",
     "StudentSuccessScore",
+    "Allocation",
 ]

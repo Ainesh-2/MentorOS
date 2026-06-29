@@ -234,6 +234,21 @@ def recompute_scores(
         from backend.app.scoring.tasks import compute_all_scores
         if compute_all_scores is not None and hasattr(compute_all_scores, "delay"):
             task = compute_all_scores.delay(period)
+            if settings.CELERY_TASK_ALWAYS_EAGER:
+                try:
+                    count = task.get(timeout=30)
+                except Exception:
+                    count = recompute_and_store(db, period)
+                write_audit(db, current_user.id, "score_recompute", "system", None,
+                            details={"period": period, "students": count, "mode": "sync"})
+                return {"message": f"Recomputed scores for {count} students.", "count": count, "period": period}
+
+            if getattr(task, "result", None) is not None:
+                count = task.result
+                write_audit(db, current_user.id, "score_recompute", "system", None,
+                            details={"period": period, "students": count, "mode": "sync"})
+                return {"message": f"Recomputed scores for {count} students.", "count": count, "period": period}
+
             write_audit(db, current_user.id, "score_recompute", "system", None,
                         details={"period": period, "mode": "queued"})
             return {"message": "Score recomputation queued", "task_id": task.id, "period": period}
