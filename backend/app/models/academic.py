@@ -72,6 +72,7 @@ class PlacementProfile(Base):
     skills_count = Column(Integer, default=0)
     certifications_count = Column(Integer, default=0)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+    student = relationship("Student", back_populates="placement_profile")
 
 
 class StudentSuccessScore(Base):
@@ -96,6 +97,7 @@ class StudentSuccessScore(Base):
 
     computed_at = Column(DateTime, default=_utcnow, index=True)
     period = Column(String(20), nullable=True)
+    student = relationship("Student", back_populates="success_scores")
 
     __table_args__ = (
         Index("idx_student_computed", "student_id", "computed_at"),

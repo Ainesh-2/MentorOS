@@ -37,6 +37,8 @@ class Student(Base):
     meetings = relationship("Meeting", back_populates="student")
     attendance_records = relationship("AttendanceRecord", back_populates="student")
     lms_activity_records = relationship("LmsActivityRecord", back_populates="student")
+    placement_profile = relationship("PlacementProfile", back_populates="student",uselist=False)
+    success_scores = relationship("StudentSuccessScore", back_populates="student")
     consents = relationship(
         "StudentConsent",
         back_populates="student",
