@@ -11,8 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
 from backend.app.core.audit_middleware import AuditMiddleware
+from backend.app.core.database import Base, engine
 from backend.app.auth.router import router as auth_router
-from backend.app.allocation.router import router as allocation_router
+import backend.app.models  # noqa: F401
 from backend.app.students.router import router as students_router
 from backend.app.scoring.router import router as scoring_router
 from backend.app.mentoring.router import router as mentoring_router
@@ -47,10 +48,11 @@ def health_check():
         "version": "0.1.0"
     }
 
+Base.metadata.create_all(bind=engine)
+
 # Include routers,
 app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["Team A - Auth"])
 app.include_router(students_router, prefix=f"{settings.API_V1_STR}/students", tags=["Team A - Students"])
 app.include_router(scoring_router, prefix=f"{settings.API_V1_STR}/scoring", tags=["Team B - Success Score"])
 app.include_router(mentoring_router, prefix=f"{settings.API_V1_STR}/mentoring", tags=["Team B - Mentoring & Roster"])
 app.include_router(admin_router, prefix=f"{settings.API_V1_STR}/admin", tags=["Team C - Administration"])
-app.include_router(allocation_router, prefix=f"{settings.API_V1_STR}/allocation", tags=["Allocation Module"])

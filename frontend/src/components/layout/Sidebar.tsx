@@ -1,11 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, LogOut, X } from "lucide-react";
 import type { Role } from "@/types";
 import { useAppStore } from "@/store/useAppStore";
 import { ROLE_TITLE } from "@/api/session";
 import { Brand } from "@/components/Brand";
 import { NAV } from "./nav";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 function NavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const navigate = useNavigate();
@@ -64,11 +65,29 @@ function NavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) 
 
 function SidebarBody({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const navigate = useNavigate();
+  const { session, user } = useAppStore();
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Sign out failed", error);
+    }
+    useAppStore.getState().setSession(null, null);
+    sessionStorage.removeItem("token");
+    localStorage.removeItem("sb-ozkqklyzjmlahlwehdmd-auth-token");
+    navigate("/auth/login", { replace: true });
+    onNavigate?.();
+  };
+
   return (
     <div className="flex h-full flex-col gap-6 p-5">
       <button
         type="button"
-        onClick={() => navigate("/")}
+        onClick={() => {
+          navigate("/");
+          onNavigate?.();
+        }}
         className="w-fit rounded-sm focus-visible:outline-2 focus-visible:outline-azure-500"
         aria-label="MentorOS home"
       >
@@ -81,11 +100,31 @@ function SidebarBody({ role, onNavigate }: { role: Role; onNavigate?: () => void
 
       <NavList role={role} onNavigate={onNavigate} />
 
-      <div className="mt-auto">
+      <div className="mt-auto space-y-4">
+        {session && user && (
+          <div className="border-t border-ink/8 pt-4">
+            <div className="px-3 pb-2">
+              <p className="text-[10px] uppercase tracking-wider text-ink-soft font-semibold">Logged In As</p>
+              <p className="truncate text-caption text-ink font-medium" title={user.email}>{user.email}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-caption text-signal-coral hover:bg-signal-coral/10 transition-colors"
+            >
+              <LogOut size={15} />
+              Sign out
+            </button>
+          </div>
+        )}
+
         <button
           type="button"
-          onClick={() => navigate("/")}
-          className="flex items-center gap-2 rounded-sm px-3 py-2 text-caption text-ink-soft transition-colors hover:bg-ink/4 hover:text-ink"
+          onClick={() => {
+            navigate("/");
+            onNavigate?.();
+          }}
+          className="flex items-center gap-2 rounded-sm px-3 py-2 text-caption text-ink-soft transition-colors hover:bg-ink/4 hover:text-ink w-full"
         >
           <ArrowLeft size={15} />
           Back to landing page

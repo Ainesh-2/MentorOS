@@ -105,44 +105,21 @@ function RoleSwitcher() {
 }
 
 export function Topbar({ role, title }: { role: Role; title: string }) {
-  const { setSidebarOpen, activeRole, toggleCompanion } = useAppStore();
-  const [signedIn, setSignedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadSession() {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error("Supabase session load error", error);
-      }
-      if (data?.session?.user?.email) {
-        setSignedIn(true);
-        setUserEmail(data.session.user.email);
-      } else {
-        setSignedIn(false);
-        setUserEmail(null);
-      }
-    }
-
-    loadSession();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) {
-        setSignedIn(true);
-        setUserEmail(session.user.email);
-      } else {
-        setSignedIn(false);
-        setUserEmail(null);
-      }
-    });
-
-    return () => listener?.subscription?.unsubscribe();
-  }, []);
+  const navigate = useNavigate();
+  const { setSidebarOpen, activeRole, toggleCompanion, session, user, setSession } = useAppStore();
+  const signedIn = !!session;
+  const userEmail = user?.email ?? null;
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Sign out failed", error);
+    }
+    setSession(null, null);
     sessionStorage.removeItem("token");
-    setSignedIn(false);
-    setUserEmail(null);
+    localStorage.removeItem("sb-ozkqklyzjmlahlwehdmd-auth-token");
+    navigate("/auth/login", { replace: true });
   };
 
   return (
@@ -175,9 +152,9 @@ export function Topbar({ role, title }: { role: Role; title: string }) {
       )}
 
       <div className="hidden items-center gap-3 rounded-full border border-ink/10 bg-white/75 px-3 py-2 text-caption text-ink-soft sm:flex">
-        {signedIn ? (
+        {signedIn || sessionStorage.getItem("token") ? (
           <>
-            <span className="truncate">Signed in as {userEmail}</span>
+            <span className="truncate">Signed in as {userEmail ?? "your account"}</span>
             <Button size="sm" variant="secondary" onClick={handleSignOut}>
               Sign out
             </Button>

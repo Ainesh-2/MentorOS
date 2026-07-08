@@ -1,10 +1,9 @@
 import { create } from "zustand";
 import type { Role } from "@/types";
+import type { User, Session } from "@supabase/supabase-js";
 
 /**
- * Light global UI state. This is *not* auth — the role switcher in the topbar
- * just swaps which mock identity is "active" so a single demo can walk through
- * all four dashboards. Real auth would replace `activeRole` with a session.
+ * Light global UI state. Centralizes auth session and role routing state.
  */
 interface AppState {
   activeRole: Role;
@@ -18,6 +17,13 @@ interface AppState {
   companionOpen: boolean;
   setCompanionOpen: (open: boolean) => void;
   toggleCompanion: () => void;
+
+  /** Supabase Auth state */
+  user: User | null;
+  session: Session | null;
+  authLoading: boolean;
+  setSession: (session: Session | null, user: User | null) => void;
+  setAuthLoading: (loading: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -30,4 +36,10 @@ export const useAppStore = create<AppState>((set) => ({
   companionOpen: false,
   setCompanionOpen: (companionOpen) => set({ companionOpen }),
   toggleCompanion: () => set((s) => ({ companionOpen: !s.companionOpen })),
+
+  user: null,
+  session: null,
+  authLoading: true,
+  setSession: (session, user) => set({ session, user }),
+  setAuthLoading: (authLoading) => set({ authLoading }),
 }));

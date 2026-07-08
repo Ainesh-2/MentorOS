@@ -3,7 +3,6 @@ import { Outlet, useLocation } from "react-router-dom";
 import type { Role } from "@/types";
 import { useAppStore } from "@/store/useAppStore";
 import { LoadingState } from "@/components/primitives";
-import { Toaster } from "@/components/Toaster";
 import { CompanionDock } from "@/features/companion/CompanionDock";
 import { Background } from "./Background";
 import { Sidebar } from "./Sidebar";
@@ -51,7 +50,6 @@ export function AppShell() {
           </main>
         </div>
       </div>
-      <Toaster />
       <CompanionDock />
     </div>
   );

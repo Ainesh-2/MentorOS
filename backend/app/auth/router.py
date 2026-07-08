@@ -11,8 +11,9 @@ from backend.app.auth import schemas
 from backend.app.auth.supabase_guard import decode_supabase_token, verify_supabase_token
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
-from backend.app.core.security import verify_password, create_access_token, ALGORITHM
-from backend.app.models.user import User
+from backend.app.core.security import verify_password, create_access_token, ALGORITHM, get_password_hash
+from backend.app.models.user import User, UserRole
+from backend.app.models.student import Student
 
 router = APIRouter()
 
@@ -63,6 +64,32 @@ def get_or_create_user_from_supabase_payload(db: Session, payload: Any) -> User:
             db.refresh(user)
     else:
         db.refresh(user)
+
+    # Automatically create Student profile if user is a student and has no profile
+    if user.role == UserRole.STUDENT:
+        student = db.query(Student).filter(Student.user_id == user.id).first()
+        if not student:
+            import random
+            usn_val = f"USN-{user.id:04d}"
+            # Ensure unique usn (in case it exists)
+            while db.query(Student).filter(Student.usn == usn_val).first():
+                usn_val = f"USN-{user.id:04d}-{random.randint(10, 99)}"
+                
+            student = Student(
+                user_id=user.id,
+                usn=usn_val,
+                department="CSE",  # default
+                semester=1,        # default
+                attendance_rate=100.0,
+                cgpa=0.0,
+                success_score=100.0,
+                risk_status="Green",
+                consent_given=True,
+                is_under_18=False,
+            )
+            db.add(student)
+            db.commit()
+            db.refresh(user)
 
     return user
 
@@ -121,21 +148,66 @@ def require_role(*roles: str):
 
 @router.post("/login", response_model=schemas.Token)
 def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
-    """
-    OAuth2 compatible token login, get an access token for future requests.
-    """
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not user.hashed_password or not verify_password(form_data.password, user.hashed_password):
+    """Authenticate a local user with email and password."""
+    normalized_email = form_data.username.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This email does not exist. Please sign up first.",
+        )
+    # Accounts created via Google/Supabase may be linked without a local password.
+    # Distinguish that case so the frontend can offer password-reset or Google sign-in.
+    if not user.hashed_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect email or password"
+            detail="No local password set. Sign in with Google or request a password reset.",
         )
-    elif not user.is_active:
+    if not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            detail="Inactive user",
         )
-    
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return {
+        "access_token": create_access_token(user.id, expires_delta=access_token_expires),
+        "token_type": "bearer",
+    }
+
+
+@router.post("/register", response_model=schemas.Token)
+def register(user_create: schemas.UserCreate, db: Session = Depends(get_db)) -> Any:
+    """Register a new local user with a hashed password."""
+    normalized_email = user_create.email.strip().lower()
+    existing_user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email is already registered. Please sign in instead.",
+        )
+
+    user = User(
+        email=normalized_email,
+        full_name=user_create.full_name.strip(),
+        hashed_password=get_password_hash(user_create.password),
+        role=UserRole.STUDENT if user_create.role == "Student" else UserRole(user_create.role),
+        is_active=True,
+    )
+    db.add(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Could not create user: {exc}") from exc
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": create_access_token(user.id, expires_delta=access_token_expires),

@@ -25,7 +25,7 @@ import { Button } from "@/components/primitives";
 import { Reveal } from "@/components/Reveal";
 import { SignalDisc } from "@/components/SignalDisc";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
-import { signInWithGoogle } from "@/lib/auth";
+import { useAppStore } from "@/store/useAppStore";
 
 /** Illustrative high-performing student for the hero disc. */
 const HERO_BREAKDOWN: Breakdown = {
@@ -84,6 +84,7 @@ const NAV_LINKS = [
 export default function Landing() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { session } = useAppStore();
 
   function scrollTo(href: string) {
     setMenuOpen(false);
@@ -112,9 +113,15 @@ export default function Landing() {
             ))}
           </nav>
           <div className="hidden md:block">
-            <Button onClick={() => navigate("/app/mentor")} iconRight={<ArrowRight size={16} />}>
-              Open the demo
-            </Button>
+            {session ? (
+              <Button onClick={() => navigate("/app/mentor")} iconRight={<ArrowRight size={16} />}>
+                Open App
+              </Button>
+            ) : (
+              <Button onClick={() => navigate("/auth/login")} iconRight={<LogIn size={16} />}>
+                Sign In
+              </Button>
+            )}
           </div>
           <button
             className="rounded-sm p-2 text-ink md:hidden"
@@ -135,9 +142,15 @@ export default function Landing() {
                 {l.label}
               </button>
             ))}
-            <Button block className="mt-2" onClick={() => navigate("/app/mentor")}>
-              Open the demo
-            </Button>
+            {session ? (
+              <Button block className="mt-2" onClick={() => navigate("/app/mentor")}>
+                Open App
+              </Button>
+            ) : (
+              <Button block className="mt-2" onClick={() => navigate("/auth/login")}>
+                Sign In
+              </Button>
+            )}
           </div>
         )}
       </header>
@@ -179,15 +192,23 @@ export default function Landing() {
               transition={{ duration: 0.6, delay: 0.18 }}
               className="mt-7 flex flex-wrap items-center gap-3"
             >
-              <Button
-                size="lg"
-                onClick={async () => {
-                  await signInWithGoogle();
-                }}
-                iconRight={<LogIn size={18} />}
-              >
-                Sign in with Google
-              </Button>
+              {session ? (
+                <Button
+                  size="lg"
+                  onClick={() => navigate("/app/mentor")}
+                  iconRight={<ArrowRight size={18} />}
+                >
+                  Open App Workspace
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={() => navigate("/auth/login")}
+                  iconRight={<LogIn size={18} />}
+                >
+                  Sign In / Get Started
+                </Button>
+              )}
               <Button size="lg" variant="secondary" onClick={() => scrollTo("#how")}>
                 See how the score works
               </Button>
