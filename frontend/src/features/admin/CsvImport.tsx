@@ -25,7 +25,7 @@ const TYPES: { id: ImportType; label: string; columns: string }[] = [
   {
     id: "attendance",
     label: "Attendance",
-    columns: "roll_number, subject_code, subject_name, total_classes, attended_classes, period",
+    columns: "roll_number, subject_code, subject_name, credits, department, total_classes, attended_classes, period",
   },
   { id: "sgpa", label: "SGPA / Academic", columns: "roll_number, sgpa" },
   {
