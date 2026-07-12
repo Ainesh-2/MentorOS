@@ -8,10 +8,23 @@ Regression tests for three fixes:
 from backend.app.core.security import create_access_token
 from backend.app.models.user import User
 from backend.app.models.student import Student
-from backend.app.models.academic import AttendanceRecord, StudentSuccessScore
+from backend.app.models.academic import (Subject, AttendanceRecord, StudentSuccessScore)
 from backend.app.models.consent import StudentConsent, ConsentCategory
 
 PERIOD = "2025-ODD"
+
+
+def make_subject(db, code="CS101", name="Data Structures"):
+    subject = Subject(
+        subject_code=code,
+        subject_name=name,
+        credits=4,
+        department="CSE",
+    )
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return subject
 
 
 def mk(db, usn, sgpa=None, role="Student", under18=False):
@@ -46,7 +59,8 @@ def test_get_score_insufficient_data_and_read_only(client, db):
 
 def test_get_score_real_components(client, db):
     u, s = mk(db, "SC2", sgpa=8.0)
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=45, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id,subject_id=subject.id,total_classes=50,attended_classes=45,period=PERIOD,))
     db.commit()
     r = client.get(f"/api/v1/scoring/{s.id}", headers=auth(u))
     assert r.status_code == 200
@@ -69,7 +83,8 @@ def test_get_score_student_cannot_view_other(client, db):
 def test_batch_recalculate_persists_history(client, db):
     hod, _ = mk(db, "HOD1", role="HOD")
     _, s = mk(db, "SC5", sgpa=7.0)
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=40, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id,subject_id=subject.id,total_classes=50,attended_classes=40,period=PERIOD,))
     db.commit()
     r = client.post("/api/v1/scoring/batch-recalculate", headers=auth(hod))
     assert r.status_code == 200

@@ -19,6 +19,20 @@ from backend.app.core.database import Base
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
+class Subject(Base):
+    """Master table for academic subjects."""
+
+    __tablename__ = "subjects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_code = Column(String(50), unique=True, nullable=False, index=True)
+    subject_name = Column(String(255), nullable=False)
+    credits = Column(Integer, nullable=False)
+    department = Column(String(100), nullable=False, index=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+    attendance_records = relationship("AttendanceRecord", back_populates="subject")
+
 
 class AttendanceRecord(Base):
     """Per-subject attendance for a student in a given period (e.g. "2025-ODD")."""
@@ -27,17 +41,17 @@ class AttendanceRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
-    subject_code = Column(String(50), nullable=False)
-    subject_name = Column(String(255), nullable=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
     total_classes = Column(Integer, nullable=False)
     attended_classes = Column(Integer, nullable=False)
     period = Column(String(20), nullable=False, index=True)
     created_at = Column(DateTime, default=_utcnow)
 
     student = relationship("Student", back_populates="attendance_records")
+    subject = relationship("Subject", back_populates="attendance_records")
 
     __table_args__ = (
-        UniqueConstraint("student_id", "subject_code", "period", name="uq_attendance_student_subject_period"),
+        UniqueConstraint("student_id", "subject_id", "period", name="uq_attendance_student_subject_period"),
     )
 
 

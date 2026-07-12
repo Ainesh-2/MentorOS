@@ -7,6 +7,7 @@ from backend.app.models.meeting import Meeting, MeetingLog
 from backend.app.models.consent import StudentConsent, ConsentCategory
 from backend.app.models.audit import AuditLog
 from backend.app.models.academic import (
+    Subject,
     AttendanceRecord,
     LmsActivityRecord,
     PlacementProfile,
@@ -27,6 +28,7 @@ __all__ = [
     "StudentConsent",
     "ConsentCategory",
     "AuditLog",
+    "Subject",
     "AttendanceRecord",
     "LmsActivityRecord",
     "PlacementProfile",

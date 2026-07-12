@@ -34,6 +34,7 @@ class Allocation(Base):
         Integer,
         ForeignKey("mentors.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     allocated_at = Column(
         DateTime(timezone=True),
@@ -47,8 +48,10 @@ class Allocation(Base):
     )
     method = Column(String(20), nullable=False, default="auto")
 
-    student = relationship("Student", foreign_keys=[student_id])
-    mentor = relationship("Mentor", foreign_keys=[mentor_id])
+    student = relationship("Student", back_populates="allocations", foreign_keys=[student_id])
+    mentor = relationship("Mentor", back_populates="allocations", foreign_keys=[mentor_id])
+    allocator = relationship("User", foreign_keys=[allocated_by])
+
 
     def __repr__(self) -> str:
         return (

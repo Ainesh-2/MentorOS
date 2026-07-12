@@ -19,6 +19,7 @@ from backend.app.models.meeting import Meeting, MeetingLog
 from backend.app.models.consent import StudentConsent
 from backend.app.models.audit import AuditLog
 from backend.app.models.academic import (
+    Subject,
     AttendanceRecord,
     LmsActivityRecord,
     PlacementProfile,

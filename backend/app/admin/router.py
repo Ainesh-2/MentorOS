@@ -16,6 +16,7 @@ from backend.app.models.student import Student
 from backend.app.models.meeting import Meeting
 from backend.app.models.audit import AuditLog
 from backend.app.models.academic import (
+    Subject,
     AttendanceRecord,
     LmsActivityRecord,
     StudentSuccessScore,
@@ -64,21 +65,21 @@ def get_compliance_report(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Admins or HODs can export accreditation reports"
         )
-        
+
     students = db.query(Student).filter(Student.department == department).all()
     total_students = len(students)
-    
+
     # Calculate risk counts
     risk_summary = {"Green": 0, "Amber": 0, "Coral": 0}
     for s in students:
         if s.risk_status in risk_summary:
             risk_summary[s.risk_status] += 1
-            
+
     # Count meeting logs (completed meetings)
     meetings_count = db.query(Meeting).filter(
         Meeting.status == "Completed"
     ).count()
-    
+
     return {
         "department": department,
         "academic_year": "2025-2026",
@@ -104,14 +105,14 @@ def perform_user_action(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Admins can perform user management tasks"
         )
-        
+
     target_user = db.query(User).filter(User.id == action_in.user_id).first()
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Target user not found"
         )
-        
+
     if action_in.action == "activate":
         target_user.is_active = True
     elif action_in.action == "deactivate":
@@ -193,14 +194,19 @@ def export_naac(
             meetings,
             round(total, 1) if total is not None else "insufficient_data",
             risk,
-            _fmt_component(sc.attendance_component if sc else None, consents["attendance"]),
-            _fmt_component(sc.academic_component if sc else None, consents["academic"]),
-            round(sc.engagement_component, 1) if sc and sc.engagement_component is not None else "N/A",
-            _fmt_component(sc.placement_component if sc else None, consents["placement"]),
+            _fmt_component(sc.attendance_component if sc else None,
+                           consents["attendance"]),
+            _fmt_component(sc.academic_component if sc else None,
+                           consents["academic"]),
+            round(sc.engagement_component,
+                  1) if sc and sc.engagement_component is not None else "N/A",
+            _fmt_component(sc.placement_component if sc else None,
+                           consents["placement"]),
             "Yes" if consents["academic"] else "No",
             "Yes" if consents["attendance"] else "No",
             "Yes" if consents["placement"] else "No",
-            ",".join(cat for cat in ("academic", "attendance", "placement") if consents[cat]),
+            ",".join(cat for cat in ("academic", "attendance",
+                     "placement") if consents[cat]),
         ])
 
     write_audit(db, current_user.id, "naac_export", "system", None,
@@ -210,7 +216,8 @@ def export_naac(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=mentoros_naac_export.csv"},
+        headers={
+            "Content-Disposition": "attachment; filename=mentoros_naac_export.csv"},
     )
 
 
@@ -299,7 +306,8 @@ def export_audit_log(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=mentoros_audit_log.csv"},
+        headers={
+            "Content-Disposition": "attachment; filename=mentoros_audit_log.csv"},
     )
 
 
@@ -338,7 +346,7 @@ def import_attendance(
 ) -> Any:
     """
     Import per-subject attendance and recompute affected students.
-    CSV columns: roll_number, subject_code, subject_name, total_classes,
+    CSV columns: roll_number, subject_code, subject_name, credits, department, total_classes,
     attended_classes, period.
     """
     rows, err = _read_csv(file)
@@ -346,7 +354,8 @@ def import_attendance(
         return {"row_count": 0, "success_count": 0, "error_log": [{"row": 0, "column": "file", "reason": err}]}
 
     students = _load_students_by_roll(
-        db, {(r.get("roll_number") or "").strip() for r in rows if (r.get("roll_number") or "").strip()}
+        db, {(r.get("roll_number") or "").strip()
+             for r in rows if (r.get("roll_number") or "").strip()}
     )
     errors: list[dict] = []
     affected: set[tuple[int, str]] = set()
@@ -356,25 +365,45 @@ def import_attendance(
         roll = (row.get("roll_number") or "").strip()
         student = students.get(roll)
         if not student:
-            errors.append({"row": i, "column": "roll_number", "reason": f"Not found: {roll or '(blank)'}"})
+            errors.append({"row": i, "column": "roll_number",
+                          "reason": f"Not found: {roll or '(blank)'}"})
             continue
         try:
             total = int(row["total_classes"])
             attended = int(row["attended_classes"])
         except (KeyError, ValueError, TypeError):
-            errors.append({"row": i, "column": "total_classes/attended_classes", "reason": "Expected integers"})
+            errors.append(
+                {"row": i, "column": "total_classes/attended_classes", "reason": "Expected integers"})
             continue
         if attended > total:
-            errors.append({"row": i, "column": "attended_classes", "reason": "attended > total"})
+            errors.append({"row": i, "column": "attended_classes",
+                          "reason": "attended > total"})
             continue
 
         period = (row.get("period") or settings.SCORING_PERIOD).strip()
-        subject = (row.get("subject_code") or "").strip()
+        subject_code = (row.get("subject_code") or "").strip()
+        subject_name = (row.get("subject_name") or "").strip()
+        try:
+            credits = int(row.get("credits") or 0)
+        except (ValueError, TypeError):
+            credits = 0
+        department = (row.get("department") or student.department).strip()
+
+        subject = (
+            db.query(Subject)
+            .filter(Subject.subject_code == subject_code)
+            .first()
+        )
+        if not subject:
+            subject = Subject(subject_code=subject_code, subject_name=subject_name,
+                              credits=credits, department=department)
+            db.add(subject)
+            db.flush()  # ensure subject.id is available for AttendanceRecord
         existing = (
             db.query(AttendanceRecord)
             .filter(
                 AttendanceRecord.student_id == student.id,
-                AttendanceRecord.subject_code == subject,
+                AttendanceRecord.subject_id == subject.id,
                 AttendanceRecord.period == period,
             )
             .first()
@@ -382,13 +411,9 @@ def import_attendance(
         if existing:
             existing.total_classes = total
             existing.attended_classes = attended
-            existing.subject_name = row.get("subject_name")
         else:
-            db.add(AttendanceRecord(
-                student_id=student.id, subject_code=subject,
-                subject_name=row.get("subject_name"), total_classes=total,
-                attended_classes=attended, period=period,
-            ))
+            db.add(AttendanceRecord(student_id=student.id, subject_id=subject.id,
+                   total_classes=total, attended_classes=attended, period=period,))
         affected.add((student.id, period))
         success += 1
 
@@ -416,7 +441,8 @@ def import_lms(
         return {"row_count": 0, "success_count": 0, "error_log": [{"row": 0, "column": "file", "reason": err}]}
 
     students = _load_students_by_roll(
-        db, {(r.get("roll_number") or "").strip() for r in rows if (r.get("roll_number") or "").strip()}
+        db, {(r.get("roll_number") or "").strip()
+             for r in rows if (r.get("roll_number") or "").strip()}
     )
     errors: list[dict] = []
     affected: set[tuple[int, str]] = set()
@@ -426,14 +452,16 @@ def import_lms(
         roll = (row.get("roll_number") or "").strip()
         student = students.get(roll)
         if not student:
-            errors.append({"row": i, "column": "roll_number", "reason": f"Not found: {roll or '(blank)'}"})
+            errors.append({"row": i, "column": "roll_number",
+                          "reason": f"Not found: {roll or '(blank)'}"})
             continue
         try:
             logins = int(row.get("login_count", 0) or 0)
             submitted = int(row.get("assignments_submitted", 0) or 0)
             total = int(row.get("assignments_total", 0) or 0)
         except (ValueError, TypeError):
-            errors.append({"row": i, "column": "login_count/assignments", "reason": "Expected integers"})
+            errors.append(
+                {"row": i, "column": "login_count/assignments", "reason": "Expected integers"})
             continue
 
         period = (row.get("period") or settings.SCORING_PERIOD).strip()
@@ -480,7 +508,8 @@ def import_sgpa(
         return {"row_count": 0, "success_count": 0, "error_log": [{"row": 0, "column": "file", "reason": err}]}
 
     students = _load_students_by_roll(
-        db, {(r.get("roll_number") or "").strip() for r in rows if (r.get("roll_number") or "").strip()}
+        db, {(r.get("roll_number") or "").strip()
+             for r in rows if (r.get("roll_number") or "").strip()}
     )
     errors: list[dict] = []
     affected: set[tuple[int, str]] = set()
@@ -490,15 +519,18 @@ def import_sgpa(
         roll = (row.get("roll_number") or "").strip()
         student = students.get(roll)
         if not student:
-            errors.append({"row": i, "column": "roll_number", "reason": f"Not found: {roll or '(blank)'}"})
+            errors.append({"row": i, "column": "roll_number",
+                          "reason": f"Not found: {roll or '(blank)'}"})
             continue
         try:
             sgpa = float(row["sgpa"])
         except (KeyError, ValueError, TypeError):
-            errors.append({"row": i, "column": "sgpa", "reason": "Expected a number"})
+            errors.append({"row": i, "column": "sgpa",
+                          "reason": "Expected a number"})
             continue
         if not (0.0 <= sgpa <= 10.0):
-            errors.append({"row": i, "column": "sgpa", "reason": f"Out of range (0–10), got '{row.get('sgpa')}'"})
+            errors.append({"row": i, "column": "sgpa",
+                          "reason": f"Out of range (0–10), got '{row.get('sgpa')}'"})
             continue
 
         student.sgpa = sgpa

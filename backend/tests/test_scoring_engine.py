@@ -9,6 +9,7 @@ from backend.app.core.security import create_access_token
 from backend.app.models.user import User
 from backend.app.models.student import Student
 from backend.app.models.academic import (
+    Subject,
     AttendanceRecord,
     LmsActivityRecord,
     PlacementProfile,
@@ -17,6 +18,14 @@ from backend.app.models.academic import (
 from backend.app.scoring.engine import ScoringEngine
 
 PERIOD = "2025-ODD"
+
+
+def make_subject(db, code="CS101", name="Data Structures"):
+    subject = Subject(subject_code=code, subject_name=name,credits=4, department="CSE")
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return subject
 
 
 def make_student(db, usn, sgpa=None, role="Student"):
@@ -39,9 +48,12 @@ def auth(user):
 
 def test_attendance_full_data(db):
     _, s = make_student(db, "A1")
+    subject1 = make_subject(db, "CS101", "Data Structures")
+    subject2 = make_subject(db, "MA201", "Mathematics")
+
     db.add_all([
-        AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=45, period=PERIOD),
-        AttendanceRecord(student_id=s.id, subject_code="MA201", total_classes=40, attended_classes=40, period=PERIOD),
+        AttendanceRecord(student_id=s.id,subject_id=subject1.id,total_classes=50,attended_classes=45,period=PERIOD,),
+        AttendanceRecord(student_id=s.id,subject_id=subject2.id,total_classes=40,attended_classes=40,period=PERIOD,),
     ])
     db.commit()
     assert ScoringEngine(db).attendance_component(s.id, PERIOD) == 95.0
@@ -125,7 +137,8 @@ def test_aggregate_insufficient_when_attendance_missing(db):
 
 def test_aggregate_insufficient_when_academic_missing(db):
     _, s = make_student(db, "B2", sgpa=None)
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=45, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id,subject_id=subject.id,total_classes=50,attended_classes=45,period=PERIOD,))
     db.commit()
     result = ScoringEngine(db).compute_success_score(s.id, PERIOD)
     assert result["total_score"] is None
@@ -134,8 +147,9 @@ def test_aggregate_insufficient_when_academic_missing(db):
 
 def test_aggregate_green(db):
     _, s = make_student(db, "B3", sgpa=8.0)
+    subject = make_subject(db)
     db.add_all([
-        AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=48, period=PERIOD),
+        AttendanceRecord(student_id=s.id, subject_id=subject.id, total_classes=50, attended_classes=48, period=PERIOD),
         LmsActivityRecord(student_id=s.id, period=PERIOD, login_count=25, assignments_submitted=19, assignments_total=20),
         PlacementProfile(student_id=s.id, has_resume=True, skills_count=3, certifications_count=1),
     ])
@@ -148,7 +162,8 @@ def test_aggregate_green(db):
 
 def test_store_score_writes_history_and_mirror(db):
     _, s = make_student(db, "B4", sgpa=4.0)
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=20, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id, subject_id=subject.id, total_classes=50, attended_classes=20, period=PERIOD))
     db.commit()
     ScoringEngine(db).store_score(s.id, PERIOD)
     rows = db.query(StudentSuccessScore).filter(StudentSuccessScore.student_id == s.id).all()
@@ -164,7 +179,8 @@ def test_store_score_writes_history_and_mirror(db):
 def test_recompute_endpoint_persists(client, db):
     admin, _ = make_student(db, "ADM", role="Admin")
     _, s = make_student(db, "S1", sgpa=8.0)
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=45, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id, subject_id=subject.id, total_classes=50, attended_classes=45, period=PERIOD))
     db.commit()
 
     r = client.post("/api/v1/admin/scores/recompute", headers=auth(admin))
@@ -178,9 +194,9 @@ def test_import_attendance_then_score(client, db):
     _, s = make_student(db, "CS001", sgpa=7.0)
 
     csv_text = (
-        "roll_number,subject_code,subject_name,total_classes,attended_classes,period\n"
-        f"CS001,CS101,Data Structures,50,45,{PERIOD}\n"
-        f"CS999,CS101,Data Structures,50,45,{PERIOD}\n"  # unknown roll → error
+        "roll_number,subject_code,subject_name,credits,department,total_classes,attended_classes,period\n"
+        f"CS001,CS101,Data Structures,4,CSE,50,45,{PERIOD}\n"
+        f"CS999,CS101,Data Structures,4,CSE,50,45,{PERIOD}\n"  # unknown roll → error
     )
     r = client.post(
         "/api/v1/admin/import/attendance",
@@ -199,7 +215,8 @@ def test_import_attendance_then_score(client, db):
 def test_naac_export_reflects_computed_score(client, db):
     admin, _ = make_student(db, "ADM4", role="Admin")
     _, s = make_student(db, "CS777", sgpa=8.0)
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=45, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id, subject_id=subject.id, total_classes=50, attended_classes=45, period=PERIOD))
     db.commit()
 
     client.post("/api/v1/admin/scores/recompute", headers=auth(admin))
@@ -213,7 +230,8 @@ def test_naac_export_reflects_computed_score(client, db):
 def test_import_sgpa_sets_field_and_recomputes(client, db):
     admin, _ = make_student(db, "ADM5", role="Admin")
     _, s = make_student(db, "CS888")  # sgpa None initially
-    db.add(AttendanceRecord(student_id=s.id, subject_code="CS101", total_classes=50, attended_classes=45, period=PERIOD))
+    subject = make_subject(db)
+    db.add(AttendanceRecord(student_id=s.id, subject_id=subject.id, total_classes=50, attended_classes=45, period=PERIOD))
     db.commit()
 
     csv_text = "roll_number,sgpa\nCS888,8.0\nCS000,7.0\nCS888bad,15\n"
