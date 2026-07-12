@@ -34,6 +34,7 @@ class Allocation(Base):
         Integer,
         ForeignKey("mentors.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     allocated_at = Column(
         DateTime(timezone=True),
