@@ -15,4 +15,5 @@ class Mentor(Base):
     # Relationships
     user = relationship("User", back_populates="mentor_profile")
     students = relationship("Student", back_populates="mentor")
+    allocations = relationship("Allocation", back_populates="mentor", foreign_keys="[Allocation.mentor_id]")
     meetings = relationship("Meeting", back_populates="mentor")

@@ -52,3 +52,4 @@ class MeetingLog(Base):
     logged_by = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     meeting = relationship("Meeting", back_populates="log")
+    logged_by_user = relationship("User", foreign_keys=[logged_by])
