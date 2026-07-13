@@ -53,7 +53,82 @@ def read_student_me(
     return student
 
 
-@router.put("/me/consent", response_model=schemas.StudentResponse)
+@router.put("/me", response_model=schemas.StudentResponse)
+def update_student_me(
+    update: schemas.StudentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Update current student's editable profile fields (mobile, parent contact, etc.).
+    """
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found for this user",
+        )
+    for field, value in update.model_dump(exclude_unset=True).items():
+        setattr(student, field, value)
+    db.commit()
+    db.refresh(student)
+    return student
+
+
+@router.post("/me/profile-picture", response_model=schemas.StudentResponse)
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Upload a profile picture. Stores in Supabase Storage and saves the public URL.
+    Accepts image/jpeg, image/png, image/webp — max 5 MB.
+    """
+    import io
+    from backend.app.core.supabase_client import get_supabase_client
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found for this user",
+        )
+
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+    MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only JPEG, PNG, and WebP images are allowed.",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size must be under 5 MB.",
+        )
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
+    storage_path = f"profile-pictures/{student.id}.{ext}"
+
+    supabase = get_supabase_client()
+    supabase.storage.from_("avatars").upload(
+        path=storage_path,
+        file=io.BytesIO(contents),
+        file_options={"content-type": file.content_type, "upsert": "true"},
+    )
+
+    public_url = supabase.storage.from_("avatars").get_public_url(storage_path)
+    student.profile_picture_url = public_url
+    db.commit()
+    db.refresh(student)
+    return student
+
+
+
 def update_student_consent(
     consent_update: schemas.StudentConsentUpdate,
     db: Session = Depends(get_db),

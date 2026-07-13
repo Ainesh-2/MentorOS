@@ -55,30 +55,22 @@ export function ConsentSettings({
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2">
-        <ShieldCheck size={18} className="text-azure-600" />
-        <span className="text-caption font-medium text-ink-soft">
-          You decide what your mentor sees. Changes apply immediately.
+      <div className="mb-3 flex items-center gap-2 rounded-md border border-signal-amber/20 bg-signal-amber/8 p-3">
+        <ShieldCheck size={16} className="shrink-0 text-signal-amber" />
+        <span className="text-caption text-signal-amber">
+          Feature in development 
         </span>
       </div>
-      {isUnder18 && (
-        <div className="mb-2 rounded-lg border border-signal-amber/20 bg-signal-amber/10 p-3 text-caption text-signal-amber">
-          A parent or guardian must provide consent for this account. Contact your
-          admin to enable parental approval.
-        </div>
-      )}
-      <div className="divide-y divide-ink/8">
+      <div className="divide-y divide-ink/8 opacity-60 pointer-events-none select-none">
         {(["academic", "attendance", "placement"] as Key[]).map((key) => (
           <Switch
             key={key}
             label={COPY[key].label}
-            locked={isUnder18}
-            lockedNote={isUnder18 ? "Parent approval needed" : undefined}
-            description={
-              saving === key ? "Saving…" : COPY[key].description
-            }
+            locked
+            lockedNote={COPY[key].description}
+            description={COPY[key].description}
             checked={consents[key]}
-            onChange={(next) => toggle(key, next)}
+            onChange={() => {}}
           />
         ))}
         <Switch

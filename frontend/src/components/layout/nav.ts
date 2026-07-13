@@ -3,11 +3,14 @@ import {
   CalendarDays,
   FileDown,
   Grid3x3,
+  Home,
   LayoutDashboard,
   ShieldCheck,
   Sparkles,
+  TableProperties,
   TrendingUp,
   Upload,
+  UserCircle,
   Users,
   Users2,
 } from "lucide-react";
@@ -16,19 +19,18 @@ import type { Role } from "@/types";
 export interface NavItem {
   label: string;
   icon: LucideIcon;
-  /** Route to navigate to (the role's home). */
   to: string;
-  /** Optional in-page section to smooth-scroll to. */
   anchor?: string;
-  /** Special UI action instead of navigation. */
   action?: "companion";
 }
 
 export const NAV: Record<Role, NavItem[]> = {
   student: [
-    { label: "Overview", icon: LayoutDashboard, to: "/app/student", anchor: "overview" },
-    { label: "My meetings", icon: CalendarDays, to: "/app/student", anchor: "meetings" },
-    { label: "Privacy & consent", icon: ShieldCheck, to: "/app/student", anchor: "consent" },
+    { label: "Home", icon: Home, to: "/app/student" },
+    { label: "Attendance", icon: TableProperties, to: "/app/student/attendance" },
+    { label: "My meetings", icon: CalendarDays, to: "/app/student/meetings" },
+    { label: "Profile", icon: UserCircle, to: "/app/student/profile" },
+    { label: "Privacy & consent", icon: ShieldCheck, to: "/app/student/consent" },
     { label: "AI Companion", icon: Sparkles, to: "/app/student", action: "companion" },
   ],
   mentor: [

@@ -15,6 +15,9 @@ class Student(Base):
     parent_mobile = Column(String, nullable=True)
     parent_email = Column(String, nullable=True)
     
+    # Profile picture URL (stored in Supabase Storage or external CDN)
+    profile_picture_url = Column(String, nullable=True)
+
     # Analytics / Academic signals
     attendance_rate = Column(Float, default=100.0)
     cgpa = Column(Float, default=0.0)

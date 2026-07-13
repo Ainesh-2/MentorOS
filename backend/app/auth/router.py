@@ -33,6 +33,12 @@ def get_or_create_user_from_supabase_payload(db: Session, payload: Any) -> User:
         )
 
     normalized_email = email.strip().lower()
+    if not normalized_email.endswith("@mitwpu.edu.in"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only @mitwpu.edu.in accounts are permitted.",
+        )
+
     user = db.query(User).filter(User.supabase_user_id == supabase_id).first()
     if not user:
         user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
@@ -43,6 +49,7 @@ def get_or_create_user_from_supabase_payload(db: Session, payload: Any) -> User:
                 email=normalized_email,
                 full_name=full_name,
                 supabase_user_id=supabase_id,
+                hashed_password=get_password_hash("test123"),
                 is_active=True,
             )
             db.add(user)
@@ -150,19 +157,26 @@ def require_role(*roles: str):
 def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
     """Authenticate a local user with email and password."""
     normalized_email = form_data.username.strip().lower()
+
+    if not normalized_email.endswith("@mitwpu.edu.in"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only @mitwpu.edu.in accounts are permitted.",
+        )
+
     user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="This email does not exist. Please sign up first.",
+            detail="No account found for this email. Contact your administrator.",
         )
     # Accounts created via Google/Supabase may be linked without a local password.
     # Distinguish that case so the frontend can offer password-reset or Google sign-in.
     if not user.hashed_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No local password set. Sign in with Google or request a password reset.",
+            detail="first_login",
         )
     if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -246,7 +260,75 @@ def login_with_supabase_token(
     }
 
 
-@router.post("/password-reset/request")
+@router.post("/set-password", response_model=schemas.Token)
+def set_initial_password(
+    payload: schemas.SetPasswordRequest,
+    db: Session = Depends(get_db),
+) -> Any:
+    """
+    Set a password for an account that has none yet (first-time setup).
+    Requires the user to already exist in the DB (pre-seeded by admin).
+    """
+    normalized_email = payload.email.strip().lower()
+    if not normalized_email.endswith("@mitwpu.edu.in"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only @mitwpu.edu.in accounts are allowed.",
+        )
+    user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found for this email. Contact your administrator.",
+        )
+    if user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A password is already set. Use change password instead.",
+        )
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters.",
+        )
+    user.hashed_password = get_password_hash(payload.new_password)
+    db.commit()
+    db.refresh(user)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return {
+        "access_token": create_access_token(user.id, expires_delta=access_token_expires),
+        "token_type": "bearer",
+    }
+
+
+@router.post("/change-password")
+def change_password(
+    payload: schemas.ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Change password for an authenticated user."""
+    if not current_user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No password set. Use set-password instead.",
+        )
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect.",
+        )
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters.",
+        )
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    db.commit()
+    return {"message": "Password changed successfully."}
+
+
+
 def request_password_reset(
     reset_request: schemas.PasswordResetRequest,
     db: Session = Depends(get_db)

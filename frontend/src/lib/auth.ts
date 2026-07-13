@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 
+const ALLOWED_GOOGLE_DOMAIN = "mitwpu.edu.in";
+
 export async function signInWithGoogle() {
   return await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -7,6 +9,7 @@ export async function signInWithGoogle() {
       redirectTo: `${window.location.origin}/auth/callback`,
       queryParams: {
         prompt: "select_account",
+        hd: ALLOWED_GOOGLE_DOMAIN,
       },
     },
   });

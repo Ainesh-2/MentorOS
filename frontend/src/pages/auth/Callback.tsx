@@ -34,7 +34,12 @@ export default function Callback() {
         } catch (err) {
           console.error("Backend login failed", err);
           setStatus("error");
-          setMessage("Signed in with Supabase, but backend login failed. Check console.");
+          const detail = err instanceof Error ? err.message : "Unknown error";
+          setMessage(
+            detail.includes("Only @mitwpu.edu.in accounts are permitted")
+              ? "Only @mitwpu.edu.in Google accounts are allowed for sign-in."
+              : `Signed in with Supabase, but backend login failed: ${detail}`
+          );
           return;
         }
         return;

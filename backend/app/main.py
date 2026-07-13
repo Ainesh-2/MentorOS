@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
 from backend.app.core.audit_middleware import AuditMiddleware
-from backend.app.core.database import Base, engine
 from backend.app.auth.router import router as auth_router
 import backend.app.models  # noqa: F401
 from backend.app.students.router import router as students_router
@@ -47,8 +46,6 @@ def health_check():
         "project": settings.PROJECT_NAME,
         "version": "0.1.0"
     }
-
-Base.metadata.create_all(bind=engine)
 
 # Include routers,
 app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["Team A - Auth"])

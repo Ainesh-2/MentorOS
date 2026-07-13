@@ -17,6 +17,7 @@ class StudentBase(BaseModel):
     parent_email: Optional[str] = None
     sgpa: Optional[float] = None
     is_under_18: Optional[bool] = False
+    profile_picture_url: Optional[str] = None
 
 
 class StudentCreate(StudentBase):
@@ -35,6 +36,7 @@ class StudentUpdate(BaseModel):
     parent_mobile: Optional[str] = None
     parent_email: Optional[str] = None
     is_under_18: Optional[bool] = None
+    profile_picture_url: Optional[str] = None
 
 
 class StudentConsentUpdate(BaseModel):

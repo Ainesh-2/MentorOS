@@ -13,6 +13,10 @@ const Landing = lazy(() => import("@/pages/auth/Landing"));
 const Login = lazy(() => import("@/pages/auth/Login"));
 const Callback = lazy(() => import("@/pages/auth/Callback"));
 const StudentDashboard = lazy(() => import("@/pages/student/StudentDashboard"));
+const AttendancePage = lazy(() => import("@/pages/student/AttendancePage"));
+const MeetingsPage = lazy(() => import("@/pages/student/MeetingsPage"));
+const ProfilePage = lazy(() => import("@/pages/student/ProfilePage"));
+const ConsentPage = lazy(() => import("@/pages/student/ConsentPage"));
 const MentorDashboard = lazy(() => import("@/pages/mentor/MentorDashboard"));
 const HODDashboard = lazy(() => import("@/pages/admin/HODDashboard"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
@@ -98,6 +102,10 @@ export default function App() {
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Navigate to="/app/mentor" replace />} />
             <Route path="student" element={<StudentDashboard />} />
+            <Route path="student/attendance" element={<AttendancePage />} />
+            <Route path="student/meetings" element={<MeetingsPage />} />
+            <Route path="student/profile" element={<ProfilePage />} />
+            <Route path="student/consent" element={<ConsentPage />} />
             <Route path="mentor" element={<MentorDashboard />} />
             <Route path="hod" element={<HODDashboard />} />
             <Route path="admin" element={<AdminDashboard />} />

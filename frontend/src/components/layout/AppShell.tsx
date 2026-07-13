@@ -9,7 +9,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 const PAGE_TITLE: Record<Role, string> = {
-  student: "Your progress",
+  student: "Home",
   mentor: "Mentee roster",
   hod: "Department overview",
   admin: "Administration",

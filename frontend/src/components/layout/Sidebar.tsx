@@ -1,29 +1,108 @@
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, LogOut, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, LogOut, X } from "lucide-react";
 import type { Role } from "@/types";
 import { useAppStore } from "@/store/useAppStore";
-import { ROLE_TITLE } from "@/api/session";
+import { ROLE_HOME, ROLE_TITLE, resolveIdentity } from "@/api/session";
+import { Avatar } from "@/components/primitives/Avatar";
 import { Brand } from "@/components/Brand";
 import { NAV } from "./nav";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 
+const ROLE_ORDER: Role[] = ["student", "mentor", "hod", "admin"];
+
+const ROLE_BLURB: Record<Role, string> = {
+  student: "See your own Success Score",
+  mentor: "Roster, meetings & logs",
+  hod: "Department-wide risk view",
+  admin: "Users, imports & exports",
+};
+
+/** Collapsed demo role switcher for the sidebar footer */
+function DemoRoleSwitcher({ role }: { role: Role }) {
+  const navigate = useNavigate();
+  const { activeRole, setActiveRole } = useAppStore();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  function choose(r: Role) {
+    setActiveRole(r);
+    setOpen(false);
+    navigate(ROLE_HOME[r]);
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-caption text-ink-soft transition-colors hover:bg-ink/4 hover:text-ink"
+      >
+        <ChevronDown size={14} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
+        <span className="text-[11px] uppercase tracking-wide font-medium">Demo: Switch view</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 rounded-md border border-ink/8 bg-white/95 p-1.5 shadow-lg backdrop-blur-sm">
+          <p className="px-2 pb-1.5 pt-1 text-[10px] uppercase tracking-wide font-medium text-ink-soft/70">
+            Viewing as
+          </p>
+          {ROLE_ORDER.map((r) => {
+            const id = resolveIdentity(r);
+            const active = r === activeRole;
+            return (
+              <button
+                key={r}
+                onClick={() => choose(r)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-sm px-2 py-1.5 text-left transition-colors",
+                  active ? "bg-azure-200/45" : "hover:bg-ink/4",
+                )}
+              >
+                <Avatar name={id.name} hue={id.hue} size="sm" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-caption font-medium text-ink">{ROLE_TITLE[r]}</span>
+                  <span className="block truncate text-[11px] text-ink-soft">{ROLE_BLURB[r]}</span>
+                </span>
+                {active && <Check size={14} className="shrink-0 text-azure-600" />}
+              </button>
+            );
+          })}
+          <p className="px-2 pb-1 pt-1.5 text-[10px] text-ink-soft/70">
+            Demo only — no login required.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const toggleCompanion = useAppStore((s) => s.toggleCompanion);
-  // Track the active anchor by hash; default to the first item on each page.
-  const activeHash = location.hash.replace("#", "");
 
   return (
     <nav className="flex flex-col gap-1" aria-label={`${ROLE_TITLE[role]} navigation`}>
-      {NAV[role].map((item, i) => {
+      {NAV[role].map((item) => {
         const Icon = item.icon;
+        // Active if the current pathname matches the item's route exactly,
+        // or for anchor-only items (no subroute), if it starts with the base path.
         const isActive = item.action
           ? false
-          : activeHash
-            ? activeHash === item.anchor
-            : i === 0;
+          : item.to === location.pathname ||
+            (item.anchor && location.pathname === item.to);
+
         return (
           <button
             key={item.label}
@@ -32,13 +111,11 @@ function NavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) 
               if (item.action === "companion") {
                 toggleCompanion();
               } else {
-                if (location.pathname !== item.to) navigate(item.to);
+                navigate(item.to);
                 if (item.anchor) {
-                  // Defer so the target exists after any route change.
                   window.setTimeout(() => {
                     const el = document.getElementById(item.anchor!);
                     el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    history.replaceState(null, "", `#${item.anchor}`);
                   }, 60);
                 }
               }
@@ -117,6 +194,11 @@ function SidebarBody({ role, onNavigate }: { role: Role; onNavigate?: () => void
             </button>
           </div>
         )}
+
+        {/* Demo role switcher */}
+        <div className="border-t border-ink/8 pt-3">
+          <DemoRoleSwitcher role={role} />
+        </div>
 
         <button
           type="button"
